@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "191098983593",
+    "firebase_url": "https://femdefend-7cae0-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "femdefend-7cae0",
+    "storage_bucket": "femdefend-7cae0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:191098983593:android:2f5d053ce1b3ea364cc5b8",
+        "android_client_info": {
+          "package_name": "com.example.femfdefend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAt0DNJByiX1UCDTvfPaa5kfe2cnuxmdpU"
+        },
+        {
+          "current_key": "AIzaSyCbXhsai78DoUtqMKZCf6tT7z0c0RK0vLY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:191098983593:android:a891816b737c0e514cc5b8",
+        "android_client_info": {
+          "package_name": "com.example.femfdefend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAt0DNJByiX1UCDTvfPaa5kfe2cnuxmdpU"
+        },
+        {
+          "current_key": "AIzaSyCbXhsai78DoUtqMKZCf6tT7z0c0RK0vLY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

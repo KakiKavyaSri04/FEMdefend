@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <attr name="colorOnBackground" format="color" />
+    
+    <declare-styleable name="CircularFlow">
+        <attr name="circularflow_viewCenter" format="reference" />
+        <attr name="circularflow_defaultRadius" format="dimension" />
+        <attr name="circularflow_defaultAngle" format="float" />
+        <attr name="circularflow_angles" format="string" />
+        <attr name="circularflow_radiusInDP" format="string" />
+    </declare-styleable>
+</resources>
