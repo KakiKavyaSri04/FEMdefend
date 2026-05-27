@@ -77,6 +77,9 @@ public class DashboardActivity extends AppCompatActivity implements SensorEventL
     // Emergency State Management
     private boolean isEmergencyActive = false;
     private EmergencyServiceHandler emergencyServiceHandler;
+    private String pendingTrigger = "";
+    private static final int REQUEST_CANCEL_EMERGENCY = 1001;
+    private android.media.MediaPlayer mediaPlayer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -139,7 +142,7 @@ public class DashboardActivity extends AppCompatActivity implements SensorEventL
             binding.cardLiveTracking.setOnClickListener(v -> 
                 startActivity(new Intent(this, LiveTrackingActivity.class)));
 
-            binding.btnPanic.setOnClickListener(v -> activatePanicMode("Button pressed"));
+            binding.btnPanic.setOnClickListener(v -> startEmergencyCancellationFlow("Button pressed"));
         } catch (Exception e) {
             ErrorHandler.handleException(this, e, "Setting up click listeners");
         }
@@ -292,6 +295,87 @@ public class DashboardActivity extends AppCompatActivity implements SensorEventL
         }
     }
 
+    private void startEmergencyCancellationFlow(String trigger) {
+        if (isEmergencyActive) {
+            Toast.makeText(this, "Emergency alert already active!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            isEmergencyActive = true;
+            pendingTrigger = trigger;
+            binding.btnPanic.setEnabled(false);
+
+            // Play police siren immediately to deter threats and warn nearby people!
+            playPoliceSiren();
+
+            Intent intent = new Intent(this, EmergencyCancelDialogActivity.class);
+            startActivityForResult(intent, REQUEST_CANCEL_EMERGENCY);
+        } catch (Exception e) {
+            Log.e(TAG, "Error starting emergency cancellation flow: " + e.getMessage());
+            isEmergencyActive = false;
+            binding.btnPanic.setEnabled(true);
+            stopPoliceSiren();
+            // Fallback: trigger immediately if launching cancellation flow fails
+            activatePanicMode(trigger);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CANCEL_EMERGENCY) {
+            boolean confirmed = false;
+            if (resultCode == RESULT_OK && data != null) {
+                confirmed = data.getBooleanExtra(EmergencyCancelDialogActivity.EXTRA_CONFIRMED, false);
+            }
+            
+            if (confirmed) {
+                // Reset flag temporarily so activatePanicMode doesn't reject it
+                isEmergencyActive = false;
+                activatePanicMode(pendingTrigger.isEmpty() ? "Emergency confirmed" : pendingTrigger);
+            } else {
+                isEmergencyActive = false;
+                binding.btnPanic.setEnabled(true);
+                // Stop police siren immediately when cancelled
+                stopPoliceSiren();
+                Toast.makeText(this, "Emergency cancelled", Toast.LENGTH_SHORT).show();
+            }
+            pendingTrigger = "";
+        }
+    }
+
+    private void playPoliceSiren() {
+        try {
+            if (mediaPlayer != null) {
+                mediaPlayer.release();
+            }
+            mediaPlayer = android.media.MediaPlayer.create(this, R.raw.police_siren);
+            if (mediaPlayer != null) {
+                mediaPlayer.setLooping(true); // Siren loops infinitely for continuous panic sound
+                mediaPlayer.start();
+                Log.i(TAG, "Police siren audio playback started.");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to start police siren audio playback: " + e.getMessage(), e);
+        }
+    }
+
+    private void stopPoliceSiren() {
+        try {
+            if (mediaPlayer != null) {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.release();
+                mediaPlayer = null;
+                Log.i(TAG, "Police siren audio playback stopped.");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to stop police siren audio playback: " + e.getMessage(), e);
+        }
+    }
+
     /**
      * Provides haptic feedback for emergency activation
      */
@@ -428,6 +512,12 @@ public class DashboardActivity extends AppCompatActivity implements SensorEventL
     }
 
     @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        stopPoliceSiren();
+    }
+
+    @Override
     public void onSensorChanged(SensorEvent event) {
         try {
             if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
@@ -440,7 +530,7 @@ public class DashboardActivity extends AppCompatActivity implements SensorEventL
                     float acceleration = (float) Math.sqrt(x * x + y * y + z * z);
                     if (acceleration > SHAKE_THRESHOLD) {
                         lastShakeTime = currentTime;
-                        activatePanicMode("Shake detected");
+                        startEmergencyCancellationFlow("Shake detected");
                     }
                 }
             }

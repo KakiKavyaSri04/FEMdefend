@@ -84,12 +84,16 @@ public class SafeRouteActivity extends AppCompatActivity implements OnMapReadyCa
         // Initialize route calculator
         routeCalculator = new SafeRouteCalculator(this, new SafeRouteCalculator.OnRouteCalculatedListener() {
             @Override
-            public void onRouteCalculated(List<List<LatLng>> routes, List<String> durations, List<String> distances) {
+            public void onRouteCalculated(List<List<LatLng>> routes, List<Double> safetyScores, List<String> durations, List<String> distances) {
                 runOnUiThread(() -> {
                     binding.progressBar.setVisibility(View.GONE);
-                    drawRoutes(routes);
-                    if (!durations.isEmpty() && !distances.isEmpty()) {
-                        showRouteInfo(durations.get(0), distances.get(0));
+                    if (routes != null && !routes.isEmpty()) {
+                        drawRoutes(routes, safetyScores);
+                        if (durations != null && !durations.isEmpty() && distances != null && !distances.isEmpty() && safetyScores != null && !safetyScores.isEmpty()) {
+                            showRouteInfo(durations.get(0), distances.get(0), safetyScores.get(0));
+                        }
+                    } else {
+                        Toast.makeText(SafeRouteActivity.this, "No routes found", Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -174,7 +178,7 @@ public class SafeRouteActivity extends AppCompatActivity implements OnMapReadyCa
         return null;
     }
 
-    private void drawRoutes(List<List<LatLng>> routes) {
+    private void drawRoutes(List<List<LatLng>> routes, List<Double> safetyScores) {
         // Clear previous routes
         for (Polyline polyline : currentPolylines) {
             polyline.remove();
@@ -183,20 +187,27 @@ public class SafeRouteActivity extends AppCompatActivity implements OnMapReadyCa
 
         if (routes.isEmpty()) return;
 
-        // Draw the primary "safest" route (the first one in the sorted list) in green
+        // Draw the primary "safest" route (the first one in the sorted list)
+        double primaryScore = (safetyScores != null && !safetyScores.isEmpty()) ? safetyScores.get(0) : 0.0;
+        int primaryColor = getSafetyColor(primaryScore);
+
         PolylineOptions primaryRouteOptions = new PolylineOptions()
                 .addAll(routes.get(0))
                 .width(15f)
-                .color(Color.GREEN)
-                .zIndex(1); // Make it draw on top
+                .color(primaryColor)
+                .zIndex(2.0f); // Make it draw on top
         currentPolylines.add(map.addPolyline(primaryRouteOptions));
 
-        // Draw all other routes in red
+        // Draw all other routes
         for (int i = 1; i < routes.size(); i++) {
+            double altScore = (safetyScores != null && safetyScores.size() > i) ? safetyScores.get(i) : 0.0;
+            int altColor = getSafetyColor(altScore);
+
             PolylineOptions alternativeRouteOptions = new PolylineOptions()
                     .addAll(routes.get(i))
                     .width(10f)
-                    .color(Color.RED);
+                    .color(altColor)
+                    .zIndex(1.0f);
             currentPolylines.add(map.addPolyline(alternativeRouteOptions));
         }
 
@@ -208,18 +219,43 @@ public class SafeRouteActivity extends AppCompatActivity implements OnMapReadyCa
             }
         }
         // Also include markers
-        builder.include(startMarker.getPosition());
-        builder.include(destinationMarker.getPosition());
+        if (startMarker.getPosition() != null) {
+            builder.include(startMarker.getPosition());
+        }
+        if (destinationMarker.getPosition() != null) {
+            builder.include(destinationMarker.getPosition());
+        }
 
         final LatLngBounds bounds = builder.build();
         map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100)); // 100px padding
     }
 
-    private void showRouteInfo(String duration, String distance) {
+    private void showRouteInfo(String duration, String distance, double safetyScore) {
         if (duration != null && distance != null) {
-            String info = String.format("Duration: %s\nDistance: %s", duration, distance);
+            String safetyText;
+            if (safetyScore >= 0.7) {
+                safetyText = String.format(Locale.getDefault(), "High (%.0f%%)", safetyScore * 100);
+            } else if (safetyScore >= 0.4) {
+                safetyText = String.format(Locale.getDefault(), "Moderate (%.0f%%)", safetyScore * 100);
+            } else {
+                safetyText = String.format(Locale.getDefault(), "Low (%.0f%%)", safetyScore * 100);
+            }
+
+            String info = String.format(Locale.getDefault(), 
+                "Recommended Route:\nDuration: %s | Distance: %s\nSafety Level: %s", 
+                duration, distance, safetyText);
             binding.routeInfoTextView.setText(info);
             binding.routeInfoCard.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private int getSafetyColor(double safetyScore) {
+        if (safetyScore >= 0.7) {
+            return Color.parseColor("#2E7D32"); // Dark green / Safest
+        } else if (safetyScore >= 0.4) {
+            return Color.parseColor("#EF6C00"); // Dark orange / Moderately safe
+        } else {
+            return Color.parseColor("#C62828"); // Dark red / Low safety
         }
     }
 

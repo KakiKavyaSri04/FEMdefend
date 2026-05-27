@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Android_7.0%2B_(API_24--34)-brightgreen.svg?style=for-the-badge&logo=android)](https://developer.android.com/)
 [![Language](https://img.shields.io/badge/Language-Java_17-orange.svg?style=for-the-badge&logo=openjdk)](https://www.oracle.com/java/)
 [![Backend](https://img.shields.io/badge/Backend-Firebase_Firestore_%26_Auth-ffca28.svg?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
-[![Voice Engine](https://img.shields.io/badge/Voice_Engine-Picovoice_Porcupine_3.0-blueviolet.svg?style=for-the-badge)](https://picovoice.ai/platform/porcupine/)
+[![Voice Engine](https://img.shields.io/badge/Voice_Engine-Android_Native_SpeechRecognizer-blueviolet.svg?style=for-the-badge)](https://developer.android.com/reference/android/speech/SpeechRecognizer)
 [![Local DB](https://img.shields.io/badge/Local_DB-Room_Persistence_Library-blue.svg?style=for-the-badge)](https://developer.android.com/training/data-storage/room)
 
 FEMdefend is a production-ready Android application built to provide immediate personal safety assistance, covert background evidence recording, and on-demand legal and self-defense education. At its core is a **peer-to-peer emergency notification network** that intercepts designated SMS alerts on a guardian's device to trigger an instant alarm — bypassing conventional notification delivery constraints entirely.
@@ -34,10 +34,11 @@ FEMdefend is a production-ready Android application built to provide immediate p
 
 ## ✨ Features
 
-### 🎙️ Hands-Free Voice Trigger (Offline Wake-Word Detection)
-- Powered by **Picovoice Porcupine v3.0.1**, running a compact deep-learning model entirely on-device — no audio data ever leaves the phone.
-- Continuously listens in the background for the wake phrase **"Help Me"** with near-zero battery impact.
-- A high-priority cancellation dialog with a countdown timer prevents accidental emergency dispatches before the full alert payload is fired.
+### 🎙️ Hands-Free Voice Trigger (Offline Native Speech Recognition)
+- Powered by the **zero-cost, offline-capable Android Native `SpeechRecognizer` engine**, running entirely on-device to translate continuous background audio speech without any external network dependencies — no audio data ever leaves the phone.
+- Free from third-party licensing, subscription fees, or Picovoice sunset clauses, allowing 100% lifetime-compliant execution with zero API keys.
+- Continuously listens in the background for key safety phrases defined in `EmergencyKeywords` (such as *"help"*, *"help me"*, *"save me"*, *"emergency"*, *"sos"*) with optimized foreground-service wake-locks and low battery impact.
+- Automatically launches a high-priority 30-second cancellation countdown dialog (`EmergencyCancelDialogActivity`) upon trigger detection to prevent accidental emergency dispatches.
 
 ### 📹 Intelligent Background Recording with Darkness Detection
 - Spawns a background `LifecycleService` using **Android CameraX** to capture video evidence without interrupting the user's screen.
@@ -47,11 +48,23 @@ FEMdefend is a production-ready Android application built to provide immediate p
 - A high-priority (`999`) `BroadcastReceiver` monitors incoming SMS messages for designated emergency tags and embedded Google Maps coordinates.
 - When an alert is received on a guardian's device (provided they also have FEMdefend installed), the app intercepts the message, extracts the coordinates, and launches a full-screen panic alarm with map directions — overriding silent or do-not-disturb modes.
 
-### 🗺️ Safe Route Navigation & Active Checkpoint Tracking
-- Queries the **Google Directions API** with alternative routes enabled, decodes polyline coordinates asynchronously in `SafeRouteCalculator`, and renders the safest/shortest path in **green** with secondary alternatives in **red**.
-- Dispatches the full route waypoint list to a foreground `LocationTrackingService`, which polls high-accuracy GPS every **10 seconds**.
-- Checks proximity to each waypoint using `Location.distanceBetween()`. Upon entering a **20-metre radius**, the service advances to the next checkpoint automatically.
-- On clearing the final waypoint, the service broadcasts `com.example.femfdefend.DESTINATION_REACHED`, updates the user's status in Firestore, and terminates the tracking thread.
+### 🗺️ Safe Route Navigation & Balanced Shortest Distance Optimization
+- **Offline GeoJSON Safety Parser:** Integrates a localized OpenStreetMap schema parser ([GeoJsonParser](file:///c:/Users/HP/AndroidStudioProjects/FEMfdefend/app/src/main/java/com/example/femfdefend/utils/GeoJsonParser.java)) that processes a 1.34MB offline database ([safety_assets.geojson](file:///c:/Users/HP/AndroidStudioProjects/FEMfdefend/app/src/main/assets/safety_assets.geojson)) mapping safety assets (police stations, hospitals, pharmacies, street lights, CCTV/surveillance cameras) with zero network dependency.
+- **Safety Density & Exponential Decay:** Calculates path safety using localized waypoint densities modified by exponential distance decay parameters:
+  - $CCTV = \sum e^{-dist/50m}$ (Weight: `30%`)
+  - $Police = \sum e^{-dist/500m}$ (Weight: `30%`)
+  - $StreetLights = \sum e^{-dist/30m}$ (Weight: `20%`)
+  - $Hospitals = \sum e^{-dist/300m}$ (Weight: `10%`)
+  - $Pharmacies = \sum e^{-dist/200m}$ (Weight: `10%`)
+- **Balanced Shortest Distance Penalty (MCUS):** Evaluates alternative routes using a Multi-Criteria Utility Score (MCUS) that subtracts a normalized distance penalty relative to the shortest path:
+  $$\text{Distance Penalty} = \frac{\text{Distance}(R) - \text{Distance}_{min}}{\text{Distance}_{min}}$$
+  $$\text{Composite Score}(R) = \text{Safety Score}(R) - \left(0.15 \times \text{Distance Penalty}(R)\right)$$
+- **Dynamic Double-Redundancy Fallback:** If the live Google Directions API fails, requires billing, or encounters offline conditions, the system dynamically switches to an optimized local route generator that plots smooth parabolic safe arcs between coordinates.
+- **Vibrant Color-Coded Map Interface:** Colors route polylines dynamically based on safety thresholds:
+  - 🟢 **Green (Safest Recommended, Score $\ge 70\%$):** Rendered as a prominent, thick polyline (`width: 15f`, `zIndex: 2.0f`) on top.
+  - 🟠 **Orange (Moderate Safety, Score $40\% - 70\%$):** Rendered as a secondary alternative path (`width: 10f`).
+  - 🔴 **Red (Low Safety, Score $< 40\%$):** Rendered as a less optimal alternative path.
+- **Active Checkpoint Tracking:** Feeds route waypoints to a foreground `LocationTrackingService` polling GPS every **10 seconds**. Proximity triggers an automatic checkpoint advance within a **20-metre radius**. Tapping the final waypoint broadcasts `com.example.femfdefend.DESTINATION_REACHED` to end the session.
 
 ### 🏥 Proximity-Based Emergency Services Querying
 - Applies the **Haversine formula** against bounding-box Firestore queries to surface nearby hospitals, police stations, and women's NGOs within a **10 km radius** in real time, and automatically dispatches panic messages to relevant services.
@@ -67,7 +80,7 @@ FEMdefend is a production-ready Android application built to provide immediate p
 | Target SDK | API 34 |
 | Cloud Backend | Firebase Firestore, Firebase Auth |
 | Push Notifications | Firebase Cloud Messaging (FCM) |
-| Wake-Word Engine | Picovoice Porcupine 3.0.1 |
+| Speech Engine | Android Native SpeechRecognizer (Offline) |
 | Camera | Android CameraX |
 | Local Database | Room Persistence Library |
 | Maps & Routing | Google Maps SDK, Google Directions API |
@@ -221,7 +234,6 @@ graph TD
 - JDK 17
 - An active [Firebase project](https://console.firebase.google.com/) with Firestore and Authentication enabled
 - A valid [Google Maps API key](https://developers.google.com/maps/documentation/android-sdk/get-api-key) with the Directions API enabled
-- A [Picovoice access key](https://console.picovoice.ai/)
 
 ### Installation
 
@@ -238,7 +250,6 @@ graph TD
    Add the following to your `local.properties` file (never commit this file):
    ```properties
    MAPS_API_KEY=your_google_maps_api_key
-   PICOVOICE_ACCESS_KEY=your_picovoice_access_key
    ```
 
 4. **Sync and build**
@@ -262,11 +273,7 @@ Please ensure your code follows the existing style conventions and that any new 
 
 ---
 
-<<<<<<< HEAD
-=======
 
-
->>>>>>> fd9ae1f (resolved merge conflict)
 <div align="center">
   Built with ❤️ for women's safety.
 </div>
